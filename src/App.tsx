@@ -2,8 +2,6 @@ import Container from './components/Container'
 import Canvas from './components/Canvas'
 import Title from './components/Title'
 
-import './App.css'
-
 const App = () => {
   return (
     <Container>
