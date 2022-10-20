@@ -11,20 +11,6 @@ const Canvas = ({ width, height }) => {
   const canvasRef = useRef(null)
   const ctxRef = useRef(null)
 
-  const coefficient = ({ startX, startY, endX, endY }) => {
-    const a = endY - startY
-    const b = startX - endX
-    const c = -startX * endY + startY * endX
-    return { a, b, c }
-  }
-  const accountCross = (line1, line2) => {
-    const { a: a1, b: b1, c: c1 } = coefficient(line1)
-    const { a: a2, b: b2, c: c2 } = coefficient(line2)
-
-    const crossX = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
-    const crossY = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
-    return { crossX, crossY }
-  }
 
   const handleClick = (e) => {
     if (!drawing) {
@@ -33,17 +19,6 @@ const Canvas = ({ width, height }) => {
       fixDraw(e)
     }
     setDrawing((prev) => !prev)
-  }
-
-  const addNewCross = () => {
-    if (lines.length < 1) return
-    console.log(lines)
-    const newCross = lines.reduce((acc, line, index, array) => {
-      const lastIndex = array.length - 1
-      if ((index = lastIndex)) return acc
-      return [...acc, accountCross(array[lastIndex], line)]
-    }, [])
-    setCross((prev) => [...prev, ...newCross])
   }
 
   const fixDraw = ({ nativeEvent }) => {
@@ -59,7 +34,6 @@ const Canvas = ({ width, height }) => {
     ])
     setCurrentStart([])
     setCurrentEnd([])
-    // addNewCross()
   }
 
   const previewDraw = ({ nativeEvent }) => {
@@ -101,13 +75,79 @@ const Canvas = ({ width, height }) => {
         ctxRef.current.stroke()
       })
     }
+
+
+    if (cross.length) {
+
+      cross.forEach((line) => {
+        const { crossX, crossY } = line;
+        ctxRef.current.fillStyle = 'red'
+        ctxRef.current.beginPath();
+        ctxRef.current.arc(crossX, crossY, 2, 0, 2 * Math.PI, false);
+        ctxRef.current.fill();
+      })
+    }
+
     if (currentEnd.length) {
       ctxRef.current.beginPath()
       ctxRef.current.moveTo(currentStart[0], currentStart[1])
       ctxRef.current.lineTo(currentEnd[0], currentEnd[1])
       ctxRef.current.stroke()
+
     }
-  }, [lines, currentStart, currentEnd, drawing])
+
+    const coefficient = ({ startX, startY, endX, endY }) => {
+      const a = endY - startY
+      const b = startX - endX
+      const c = -startX * endY + startY * endX
+      return { a, b, c }
+    }
+
+    const isOutOfRange = (line, crossX, crossY) => {
+      const { startX, startY, endX, endY } = line
+      const rangeX = [startX, endX].sort((x, y) => x - y)
+      const rangeY = [startY, endY].sort((x, y) => x - y)
+      if (crossX >= rangeX[0] && crossX <= rangeX[1] && crossY >= rangeY[0] && crossY <= rangeY[1]) return false;
+      return true;
+    }
+
+    const accountCross = (line1, line2) => {
+      const { a: a1, b: b1, c: c1 } = coefficient(line1)
+      const { a: a2, b: b2, c: c2 } = coefficient(line2)
+      if (a1 * b2 - a2 * b1 === 0) return null
+      const crossX = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
+      const crossY = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
+      if (isOutOfRange(line1, crossX, crossY)) return null
+      if (isOutOfRange(line2, crossX, crossY)) return null
+      return { crossX, crossY }
+    }
+
+    const accountCrossesNewLine = (newLine) => {
+      console.log('newLine', newLine)
+      const newCrosses = lines.reduce((acc, line) => {
+        const newCross = accountCross(newLine, line)
+        if (!newCross) return acc
+        return [...acc, newCross]
+      }, [])
+      return newCrosses;
+    }
+
+    const newCrosses = accountCrossesNewLine({startX: currentStart[0], startY: currentStart[1], endX: currentEnd[0], endY: currentEnd[1]});
+
+    if (newCrosses.length){
+      newCrosses.forEach((line)=>{
+        const { crossX, crossY } = line;
+        ctxRef.current.fillStyle = 'red'
+        ctxRef.current.beginPath();
+        ctxRef.current.arc(crossX, crossY, 2, 0, 2 * Math.PI, false);
+        ctxRef.current.fill();
+      })
+
+    }
+
+
+
+  }, [lines, cross, currentStart, currentEnd, drawing])
 
   useEffect(() => {
     if (lines.length >= 2) {
@@ -117,39 +157,61 @@ const Canvas = ({ width, height }) => {
         const c = -startX * endY + startY * endX
         return { a, b, c }
       }
+
+      const isOutOfRange = (line, crossX, crossY) => {
+        const { startX, startY, endX, endY } = line
+        const rangeX = [startX, endX].sort((x, y) => x - y)
+        const rangeY = [startY, endY].sort((x, y) => x - y)
+        if (crossX >= rangeX[0] && crossX <= rangeX[1] && crossY >= rangeY[0] && crossY <= rangeY[1]) return false;
+        return true;
+      }
+
       const accountCross = (line1, line2) => {
         const { a: a1, b: b1, c: c1 } = coefficient(line1)
         const { a: a2, b: b2, c: c2 } = coefficient(line2)
-        console.log('line1', line1)
-        console.log('line2', line2)
-        console.log('line1', a1, b1, c1)
-        console.log('line2', a2, b2, c2)
         if (a1 * b2 - a2 * b1 === 0) return null
-
         const crossX = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
         const crossY = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
-        if ((crossX > width) | (crossY > height) | (crossX < 0) | (crossY < 0))
-          return null
+        if (isOutOfRange(line1, crossX, crossY)) return null
+        if (isOutOfRange(line2, crossX, crossY)) return null
         return { crossX, crossY }
       }
-      if (lines.length > 1) {
-        console.log(lines)
-        const newCrosses = lines.reduce((acc, line, index, array) => {
-          const lastIndex = array.length - 1
-          if (index === lastIndex) return acc
-          const newCross = accountCross(array[lastIndex], line)
+
+      const crossesNewLine = (newLine) => {
+        const newCrosses = lines.reduce((acc, line) => {
+
+          const newCross = accountCross(newLine, line)
           if (!newCross) return acc
-          console.log('newCross', newCross)
           return [...acc, newCross]
         }, [])
+        return newCrosses;
+      }
+
+      if (lines.length > 1) {
+        const newCrosses = crossesNewLine(lines[lines.length-1])
         setCross((prev) => [...prev, ...newCrosses])
       }
     }
   }, [lines, width, height])
 
   useEffect(() => {
-    console.log(cross)
+
+    if (cross.length) {
+
+      cross.forEach((line) => {
+        const { crossX, crossY } = line;
+        ctxRef.current.fillStyle = 'red'
+        ctxRef.current.beginPath();
+        ctxRef.current.arc(crossX, crossY, 2, 0, 2 * Math.PI, false);
+        ctxRef.current.fill();
+      })
+    }
   }, [cross])
+
+
+
+
+
   return (
     <>
       <canvas
