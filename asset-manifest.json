@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/lines-app/static/css/main.8db6bb89.css",
+    "main.js": "/lines-app/static/js/main.2f1aaf3e.js",
+    "index.html": "/lines-app/index.html",
+    "main.8db6bb89.css.map": "/lines-app/static/css/main.8db6bb89.css.map",
+    "main.2f1aaf3e.js.map": "/lines-app/static/js/main.2f1aaf3e.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.8db6bb89.css",
+    "static/js/main.2f1aaf3e.js"
+  ]
+}
