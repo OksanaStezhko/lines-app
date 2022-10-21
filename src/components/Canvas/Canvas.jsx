@@ -1,93 +1,143 @@
-import { useRef, useEffect, useState } from 'react'
+import React, { Component } from 'react'
+
 import styles from './Canvas.module.css'
 import Button from '../Button'
 
-const Canvas = ({ width, height }) => {
-  const [drawing, setDrawing] = useState(false)
-  const [currentStart, setCurrentStart] = useState([])
-  const [currentEnd, setCurrentEnd] = useState([])
-  const [lines, setLines] = useState([])
-  const [cross, setCross] = useState([])
-  const canvasRef = useRef(null)
-  const ctxRef = useRef(null)
 
-  const isButtonLeft = (e) => {
+class Canvas extends Component {
+  state = {
+    drawing: false,
+    lines: [],
+    cross: [],
+    currentStart: [],
+    currentEnd: [],
+    currentCrosses: []
+  }
+
+  canvasRef = React.createRef()
+  ctxRef = React.createRef()
+
+  isButtonLeft = (e) => {
     if (e.button === 0) return true
     e.preventDefault()
     return false;
   }
 
-  const handleClick = (e) => {
-    if (!isButtonLeft(e)) return;
-    if (!drawing) {
-      startDraw(e)
+  handleClick = (e) => {
+    if (!this.isButtonLeft(e)) return;
+    if (!this.state.drawing) {
+      this.startDraw(e)
     } else {
-      fixDraw(e)
+      this.fixDraw(e)
     }
-    setDrawing((prev) => !prev)
+    this.setState((prev) => ({ drawing: !prev.drawing }))
   }
 
-
-  const fixDraw = (e) => {
-    if (!isButtonLeft(e)) return;
+  startDraw = (e) => {
+    if (!this.isButtonLeft(e)) return;
     const { nativeEvent } = e;
     const { offsetX, offsetY } = nativeEvent
-    setLines((prev) => [
-      ...prev,
-      {
-        startX: currentStart[0],
-        startY: currentStart[1],
-        endX: offsetX,
-        endY: offsetY,
-      },
-    ])
-    setCurrentStart([])
-    setCurrentEnd([])
+    this.setState({ currentStart: [offsetX, offsetY] })
   }
 
-  const previewDraw = (e) => {
-    if (!isButtonLeft(e)) return;
+  fixDraw = (e) => {
+    if (!this.isButtonLeft(e)) return;
     const { nativeEvent } = e;
     const { offsetX, offsetY } = nativeEvent
+    const { currentStart, currentCrosses } = this.state
+    const newLine = {
+      startX: currentStart[0],
+      startY: currentStart[1],
+      endX: offsetX,
+      endY: offsetY,
+    }
+    this.setState((prev) => ({
+      lines: [...prev.lines, newLine],
+      currentStart: [],
+      currentEnd: [],
+      cross: [...prev.cross, ...currentCrosses]
+
+    }))
+
+  }
+
+  previewDraw = (e) => {
+    if (!this.isButtonLeft(e)) return;
+    const { nativeEvent } = e;
+    const { offsetX, offsetY } = nativeEvent
+    const { drawing, currentStart, currentEnd, lines } = this.state
     if (drawing) {
-      setCurrentEnd([offsetX, offsetY])
+      this.setState({ currentEnd: [offsetX, offsetY] })
+    }
+
+    const newCrosses = this.accountCrossesNewLine({ startX: currentStart[0], startY: currentStart[1], endX: currentEnd[0], endY: currentEnd[1] });
+    if (newCrosses.length) {
+      this.setState({ currentCrosses: [...newCrosses] })
     }
   }
 
-  const startDraw = (e) => {
-    if (!isButtonLeft(e)) return;
-    const { nativeEvent } = e;
-    const { offsetX, offsetY } = nativeEvent
-    setCurrentStart([offsetX, offsetY])
-  }
-
-  const clear = () => {
-    ctxRef.current.clearRect(
+  clear = () => {
+    this.ctxRef.current.clearRect(
       0,
       0,
-      canvasRef.current.width,
-      canvasRef.current.height
+      this.canvasRef.current.width,
+      this.canvasRef.current.height
     )
   }
 
-  const disappearance = () => {
-    if (lines.length) {
-      const { startX, startY, endX, endY } = lines[0];
-
-
-    }
+  coefficient = ({ startX, startY, endX, endY }) => {
+    const a = endY - startY
+    const b = startX - endX
+    const c = -startX * endY + startY * endX
+    return { a, b, c }
   }
 
-  useEffect(() => {
-    const canvas = canvasRef.current
+  isOutOfRange = (line, crossX, crossY) => {
+    const { startX, startY, endX, endY } = line
+    const rangeX = [startX, endX].sort((x, y) => x - y)
+    const rangeY = [startY, endY].sort((x, y) => x - y)
+    if (crossX >= rangeX[0] && crossX <= rangeX[1] && crossY >= rangeY[0] && crossY <= rangeY[1]) return false;
+    return true;
+  }
+
+  accountCross = (line1, line2) => {
+    const { a: a1, b: b1, c: c1 } = this.coefficient(line1)
+    const { a: a2, b: b2, c: c2 } = this.coefficient(line2)
+    if (a1 * b2 - a2 * b1 === 0) return null
+    const crossX = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
+    const crossY = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
+    if (this.isOutOfRange(line1, crossX, crossY)) return null
+    if (this.isOutOfRange(line2, crossX, crossY)) return null
+    return { crossX, crossY }
+  }
+
+  accountCrossesNewLine = (newLine) => {
+    const { lines } = this.state
+    if (!lines) return
+    const newCrosses = lines.reduce((acc, line) => {
+      const newCross = this.accountCross(newLine, line)
+      if (!newCross) return acc
+      return [...acc, newCross]
+    }, [])
+    return newCrosses;
+  }
+
+  componentDidMount = () => {
+    const { width, height } = this.props
+    const canvas = this.canvasRef.current
     canvas.width = width
     canvas.height = height
     const ctx = canvas.getContext('2d')
-    ctxRef.current = ctx
-  }, [width, height])
+    this.ctxRef.current = ctx
+  }
 
-  useEffect(() => {
-    clear()
+  componentDidUpdate = () => {
+    this.clear()
+    const { lines, cross, currentEnd, currentStart, currentCrosses } = this.state
+    const { ctxRef } = this
+
+
+
     if (lines.length) {
       lines.forEach((line) => {
         ctxRef.current.beginPath()
@@ -97,9 +147,14 @@ const Canvas = ({ width, height }) => {
       })
     }
 
+    if (currentEnd.length) {
+      ctxRef.current.beginPath()
+      ctxRef.current.moveTo(currentStart[0], currentStart[1])
+      ctxRef.current.lineTo(currentEnd[0], currentEnd[1])
+      ctxRef.current.stroke()
+    }
 
     if (cross.length) {
-
       cross.forEach((line) => {
         const { crossX, crossY } = line;
         ctxRef.current.fillStyle = 'red'
@@ -109,53 +164,8 @@ const Canvas = ({ width, height }) => {
       })
     }
 
-    if (currentEnd.length) {
-      ctxRef.current.beginPath()
-      ctxRef.current.moveTo(currentStart[0], currentStart[1])
-      ctxRef.current.lineTo(currentEnd[0], currentEnd[1])
-      ctxRef.current.stroke()
-
-    }
-
-    const coefficient = ({ startX, startY, endX, endY }) => {
-      const a = endY - startY
-      const b = startX - endX
-      const c = -startX * endY + startY * endX
-      return { a, b, c }
-    }
-
-    const isOutOfRange = (line, crossX, crossY) => {
-      const { startX, startY, endX, endY } = line
-      const rangeX = [startX, endX].sort((x, y) => x - y)
-      const rangeY = [startY, endY].sort((x, y) => x - y)
-      if (crossX >= rangeX[0] && crossX <= rangeX[1] && crossY >= rangeY[0] && crossY <= rangeY[1]) return false;
-      return true;
-    }
-
-    const accountCross = (line1, line2) => {
-      const { a: a1, b: b1, c: c1 } = coefficient(line1)
-      const { a: a2, b: b2, c: c2 } = coefficient(line2)
-      if (a1 * b2 - a2 * b1 === 0) return null
-      const crossX = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
-      const crossY = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
-      if (isOutOfRange(line1, crossX, crossY)) return null
-      if (isOutOfRange(line2, crossX, crossY)) return null
-      return { crossX, crossY }
-    }
-
-    const accountCrossesNewLine = (newLine) => {
-      const newCrosses = lines.reduce((acc, line) => {
-        const newCross = accountCross(newLine, line)
-        if (!newCross) return acc
-        return [...acc, newCross]
-      }, [])
-      return newCrosses;
-    }
-
-    const newCrosses = accountCrossesNewLine({ startX: currentStart[0], startY: currentStart[1], endX: currentEnd[0], endY: currentEnd[1] });
-
-    if (newCrosses.length) {
-      newCrosses.forEach((line) => {
+    if (currentCrosses.length) {
+      currentCrosses.forEach((line) => {
         const { crossX, crossY } = line;
         ctxRef.current.fillStyle = 'red'
         ctxRef.current.beginPath();
@@ -165,68 +175,22 @@ const Canvas = ({ width, height }) => {
 
     }
 
+  }
 
+  render() {
+    return (
+      <>
+        <canvas
+          onMouseDown={this.handleClick}
+          onMouseMove={this.previewDraw}
+          ref={this.canvasRef}
+          className={styles.canvas}
+        />
+        <Button text={'clear'} onClick={this.clear} />
+      </>
+    )
+  }
 
-  }, [lines, cross, currentStart, currentEnd, drawing])
-
-  useEffect(() => {
-
-    if (lines.length >= 2) {
-      const coefficient = ({ startX, startY, endX, endY }) => {
-        const a = endY - startY
-        const b = startX - endX
-        const c = -startX * endY + startY * endX
-        return { a, b, c }
-      }
-
-      const isOutOfRange = (line, crossX, crossY) => {
-        const { startX, startY, endX, endY } = line
-        const rangeX = [startX, endX].sort((x, y) => x - y)
-        const rangeY = [startY, endY].sort((x, y) => x - y)
-        if (crossX >= rangeX[0] && crossX <= rangeX[1] && crossY >= rangeY[0] && crossY <= rangeY[1]) return false;
-        return true;
-      }
-
-      const accountCross = (line1, line2) => {
-        const { a: a1, b: b1, c: c1 } = coefficient(line1)
-        const { a: a2, b: b2, c: c2 } = coefficient(line2)
-        if (a1 * b2 - a2 * b1 === 0) return null
-        const crossX = (b1 * c2 - b2 * c1) / (a1 * b2 - a2 * b1)
-        const crossY = (a2 * c1 - a1 * c2) / (a1 * b2 - a2 * b1)
-        if (isOutOfRange(line1, crossX, crossY)) return null
-        if (isOutOfRange(line2, crossX, crossY)) return null
-        return { crossX, crossY }
-      }
-
-      const crossesNewLine = (newLine) => {
-        const newCrosses = lines.reduce((acc, line) => {
-
-          const newCross = accountCross(newLine, line)
-          if (!newCross) return acc
-          return [...acc, newCross]
-        }, [])
-        return newCrosses;
-      }
-
-      if (lines.length > 1) {
-        const newCrosses = crossesNewLine(lines[lines.length - 1])
-        setCross((prev) => [...prev, ...newCrosses])
-      }
-    }
-  }, [lines])
-
-
-  return (
-    <>
-      <canvas
-        onMouseDown={handleClick}
-        onMouseMove={previewDraw}
-        ref={canvasRef}
-        className={styles.canvas}
-      />
-      <Button text={'clear'} onClick={clear} />
-    </>
-  )
 }
 
 export default Canvas
