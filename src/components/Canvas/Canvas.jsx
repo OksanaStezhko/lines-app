@@ -2,6 +2,7 @@ import React, { Component } from 'react'
 
 import styles from './Canvas.module.css'
 import Button from '../Button'
+import { arrayCouples } from '../../tools'
 
 
 class Canvas extends Component {
@@ -55,6 +56,7 @@ class Canvas extends Component {
       lines: [...prev.lines, newLine],
       currentStart: [],
       currentEnd: [],
+      currentCrosses: [],
       cross: [...prev.cross, ...currentCrosses]
 
     }))
@@ -65,7 +67,7 @@ class Canvas extends Component {
     if (!this.isButtonLeft(e)) return;
     const { nativeEvent } = e;
     const { offsetX, offsetY } = nativeEvent
-    const { drawing, currentStart, currentEnd, lines } = this.state
+    const { drawing, currentStart, currentEnd } = this.state
     if (drawing) {
       this.setState({ currentEnd: [offsetX, offsetY] })
     }
@@ -74,15 +76,6 @@ class Canvas extends Component {
     if (newCrosses.length) {
       this.setState({ currentCrosses: [...newCrosses] })
     }
-  }
-
-  clear = () => {
-    this.ctxRef.current.clearRect(
-      0,
-      0,
-      this.canvasRef.current.width,
-      this.canvasRef.current.height
-    )
   }
 
   coefficient = ({ startX, startY, endX, endY }) => {
@@ -122,6 +115,52 @@ class Canvas extends Component {
     return newCrosses;
   }
 
+  disappearingLines = (time) => {
+    const { lines } = this.state
+    const newLines = lines.map((line) => {
+      const delta = Math.abs(line.startX - line.endX) / 3 / 2;
+
+      const { startX, endX } = line
+      const { a, b, c } = this.coefficient(line)
+
+      const newStartX = startX < endX ? startX + delta : startX - delta
+      const newEndX = startX < endX ? endX - delta : endX + delta
+      const newStartY = (-c - a * newStartX) / b
+      const newEndY = (-c - a * newEndX) / b
+
+      return { startX: newStartX, startY: newStartY, endX: newEndX, endY: newEndY }
+    })
+
+    this.setState({ lines: [...newLines] })
+    const couplesLine = arrayCouples(lines.length)
+    const newCrossesLines = couplesLine.reduce((acc, elem) => {
+      const cross = this.accountCross(lines[elem[0]], lines[elem[1]])
+      if (cross) return [...acc, cross]
+      return acc
+    }, [])
+     this.setState({cross: newCrossesLines})
+
+  }
+
+  clearInterval = (id) => {
+    clearInterval(id)
+    this.setState({ lines: [] })
+  }
+
+  handleClickButton = () => {
+    const idInterval = setInterval(this.disappearingLines, 100, 3000)
+    setTimeout(this.clearInterval, 3000, idInterval)
+  }
+
+  clearCanvas = () => {
+    this.ctxRef.current.clearRect(
+      0,
+      0,
+      this.canvasRef.current.width,
+      this.canvasRef.current.height
+    )
+  }
+
   componentDidMount = () => {
     const { width, height } = this.props
     const canvas = this.canvasRef.current
@@ -132,11 +171,9 @@ class Canvas extends Component {
   }
 
   componentDidUpdate = () => {
-    this.clear()
+    this.clearCanvas()
     const { lines, cross, currentEnd, currentStart, currentCrosses } = this.state
     const { ctxRef } = this
-
-
 
     if (lines.length) {
       lines.forEach((line) => {
@@ -186,7 +223,7 @@ class Canvas extends Component {
           ref={this.canvasRef}
           className={styles.canvas}
         />
-        <Button text={'clear'} onClick={this.clear} />
+        <Button text={'clear'} onClick={this.handleClickButton} />
       </>
     )
   }
