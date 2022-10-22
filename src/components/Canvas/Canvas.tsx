@@ -10,13 +10,15 @@ type TLocation = [number, number]
 type TArrayNumber = [number, number][]
 
 type TCross = { crossX: number, crossY: number }
+type TCrossArray = TCross[] | []
+
 interface IState {
   drawing: boolean,
   lines: TLine[] | [],
-  cross: TCross[] | [],
+  cross: TCrossArray,
   currentStart: TLocation | [],
   currentEnd: TLocation | [],
-  currentCrosses: TCross[] | [],
+  currentCrosses: TCrossArray,
 
 }
 
@@ -25,7 +27,7 @@ interface IProps {
   height: number
 }
 
-class Canvas extends Component {
+class Canvas extends Component<IProps, IState> {
   state: IState = {
     drawing: false,
     lines: [],
@@ -34,10 +36,11 @@ class Canvas extends Component {
     currentEnd: [],
     currentCrosses: [],
 
+
   }
 
   canvasRef: React.RefObject<HTMLCanvasElement> = React.createRef()
-  ctxRef: React.RefObject<HTMLElement> = React.createRef()
+  ctxRef: CanvasRenderingContext2D | null = null
 
 
   isButtonLeft = (e: React.MouseEvent) => {
@@ -68,21 +71,32 @@ class Canvas extends Component {
     const { nativeEvent } = e;
     const { offsetX, offsetY } = nativeEvent
     const { currentStart, currentCrosses } = this.state
-    const newLine = {
+    if (!currentStart.length) return;
+    const newLine: TLine = {
       startX: currentStart[0],
       startY: currentStart[1],
       endX: offsetX,
       endY: offsetY,
     }
-    this.setState((prev: IState) => ({
-      lines: [...prev.lines, newLine],
-      currentStart: [],
-      currentEnd: [],
-      currentCrosses: [],
-      cross: [...prev.cross, ...currentCrosses]
-
+    this.setState((prev) => ({
+      lines: [...prev.lines, newLine]
     }))
 
+    this.setState((prev) => ({
+      cross: [...prev.cross, ...currentCrosses]
+    }))
+
+    this.setState({
+      currentStart: []
+    })
+
+    this.setState({
+      currentEnd: []
+    })
+
+    this.setState((prev) => ({
+      currentCrosses: [],
+    }))
   }
 
   previewDraw = (e: React.MouseEvent) => {
@@ -97,7 +111,7 @@ class Canvas extends Component {
     if (currentStart.length && currentEnd.length) {
       const newLine: TLine = { startX: currentStart[0], startY: currentStart[1], endX: currentEnd[0], endY: currentEnd[1] }
       const newCrosses = this.accountCrossesNewLine(newLine);
-      if (newCrosses.length) {
+      if (newCrosses && newCrosses.length) {
         this.setState({ currentCrosses: [...newCrosses] })
       }
     }
@@ -132,19 +146,14 @@ class Canvas extends Component {
   }
 
   accountCrossesNewLine = (newLine: TLine) => {
-
     const { lines } = this.state
-    if (!lines.length) return
 
-    const newCrosses = lines.reduce((acc: [], line: TLine) => {
+    if (lines.length < 1) return
+    let newCrosses: TCrossArray = []
+    lines.forEach((line) => {
       const newCross = this.accountCross(newLine, line)
-      if (!newCross) return acc
-      return [...acc, newCross]
-    }, [] as TCross[])
-
-
-
-
+      if (newCross) { newCrosses = [...newCrosses, newCross] }
+    })
 
     return newCrosses;
   }
@@ -171,7 +180,7 @@ class Canvas extends Component {
       const cross = this.accountCross(lines[elem[0]], lines[elem[1]])
       if (cross) return [...acc, cross]
       return acc
-    }, [] as TLocation[] | [])
+    }, [] as TCrossArray)
     this.setState({ cross: newCrossesLines })
 
   }
@@ -187,12 +196,13 @@ class Canvas extends Component {
   }
 
   clearCanvas = () => {
-    if (this.ctxRef.current) {
-      this.ctxRef.current.clearRect(
+    const { width, height } = this.props
+    if (this.ctxRef) {
+      this.ctxRef.clearRect(
         0,
         0,
-        this.canvasRef.current.width,
-        this.canvasRef.current.height
+        width,
+        height
       )
     }
   }
@@ -202,10 +212,7 @@ class Canvas extends Component {
     const canvas = this.canvasRef.current as HTMLCanvasElement
     canvas.width = width
     canvas.height = height
-    const ctx = canvas.getContext('2d')
-    this.ctxRef.current = ctx
-
-
+    this.ctxRef = canvas.getContext('2d')
   }
 
   componentDidUpdate = () => {
@@ -213,38 +220,37 @@ class Canvas extends Component {
     const { lines, cross, currentEnd, currentStart, currentCrosses } = this.state
     const { ctxRef } = this
 
-    if (lines.length) {
+    if (lines.length && ctxRef) {
       lines.forEach((line) => {
-        ctxRef.current.beginPath()
-        ctxRef.current.moveTo(line.startX, line.startY)
-        ctxRef.current.lineTo(line.endX, line.endY)
-        ctxRef.current.stroke()
+        ctxRef.beginPath()
+        ctxRef.moveTo(line.startX, line.startY)
+        ctxRef.lineTo(line.endX, line.endY)
+        ctxRef.stroke()
       })
     }
 
-    if (currentEnd.length) {
-      ctxRef.current.beginPath()
-      ctxRef.current.moveTo(currentStart[0], currentStart[1])
-      ctxRef.current.lineTo(currentEnd[0], currentEnd[1])
-      ctxRef.current.stroke()
+    if (currentEnd.length && currentStart.length && ctxRef) {
+      ctxRef.beginPath()
+      ctxRef.moveTo(currentStart[0], currentStart[1])
+      ctxRef.lineTo(currentEnd[0], currentEnd[1])
+      ctxRef.stroke()
     }
 
-    if (cross.length) {
+    if (cross.length && ctxRef) {
       cross.forEach(({ crossX, crossY }) => {
-        ctxRef.current.fillStyle = 'red'
-        ctxRef.current.beginPath();
-        ctxRef.current.arc(crossX, crossY, 4, 0, 2 * Math.PI, false);
-        ctxRef.current.fill();
+        ctxRef.fillStyle = 'red'
+        ctxRef.beginPath();
+        ctxRef.arc(crossX, crossY, 4, 0, 2 * Math.PI, false);
+        ctxRef.fill();
       })
     }
 
-    if (currentCrosses.length) {
-      currentCrosses.forEach((crossX, crossY) => {
-
-        ctxRef.current.fillStyle = 'red'
-        ctxRef.current.beginPath();
-        ctxRef.current.arc(crossX, crossY, 4, 0, 2 * Math.PI, false);
-        ctxRef.current.fill();
+    if (currentCrosses.length && ctxRef) {
+      currentCrosses.forEach(({ crossX, crossY }) => {
+        ctxRef.fillStyle = 'red'
+        ctxRef.beginPath();
+        ctxRef.arc(crossX, crossY, 4, 0, 2 * Math.PI, false);
+        ctxRef.fill();
       })
 
     }
